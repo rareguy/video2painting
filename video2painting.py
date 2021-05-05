@@ -70,7 +70,7 @@ try:
 	video_output = cv2.VideoWriter('combinedtunnel.avi',cv2.VideoWriter_fourcc(*'DIVX'), fps, size)
 	printProgressBar(0, len(painting_array), prefix = 'Progress:', suffix = 'Complete', length = 50)
 	for j in range(len(painting_array)):
-		video_output.write(painting_array[i])
+		video_output.write(painting_array[j])
 		printProgressBar(j+1, len(painting_array), prefix = 'Progress:', suffix = 'Complete', length = 50)
 	video_output.release()
 	print("all finished!")
