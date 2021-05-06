@@ -3,7 +3,12 @@ import glob
 import os
 import time
 import argparse
-# Print iterations progress
+import math
+import progressbar
+from pointillism import *
+
+###
+# Functions that are useful for readability... maybe
 def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
     """
     Call in a loop to create terminal progress bar
@@ -25,12 +30,68 @@ def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, 
     if iteration == total: 
         print()
 
-parser = argparse.ArgumentParser(description='this script will convert your normal video to painting-style video')
-parser.add_argument('source_video', metavar='source', type=str, nargs='+', help='the video filename (currently only mp4)')
+list_of_mode = ['oil', 'point']
+
+def toOilPainting(img):
+	return cv2.xphoto.oilPainting(img, 8, 1)
+	
+def toPointillismPainting(img):
+	stroke_scale = int(math.ceil(max(img.shape) / 1000))
+	print("Automatically chosen stroke scale: %d" % stroke_scale)
+	
+	gradient_smoothing_radius = int(round(max(img.shape) / 50))
+	print("Automatically chosen gradient smoothing radius: %d" % gradient_smoothing_radius)
+
+	# convert the image to grayscale to compute the gradient
+	gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+	print("Computing color palette...")
+	palette = ColorPalette.from_image(img, 20)
+
+	print("Extending color palette...")
+	palette = palette.extend([(0, 50, 0), (15, 30, 0), (-15, 30, 0)])
+
+	print("Computing gradient...")
+	gradient = VectorField.from_gradient(gray)
+
+	print("Smoothing gradient...")
+	gradient.smooth(gradient_smoothing_radius)
+
+	print("Drawing image...")
+	# create a "cartonized" version of the image to use as a base for the painting
+	res = cv2.medianBlur(img, 11)
+	# define a randomized grid of locations for the brush strokes
+	grid = randomized_grid(img.shape[0], img.shape[1], scale=3)
+	batch_size = 10000
+
+	bar = progressbar.ProgressBar()
+	for h in bar(range(0, len(grid), batch_size)):
+		# get the pixel colors at each point of the grid
+		pixels = np.array([img[x[0], x[1]] for x in grid[h:min(h + batch_size, len(grid))]])
+		# precompute the probabilities for each color in the palette
+		# lower values of k means more randomnes
+		color_probabilities = compute_color_probabilities(pixels, palette, k=9)
+
+		for i, (y, x) in enumerate(grid[h:min(h + batch_size, len(grid))]):
+			color = color_select(color_probabilities[i], palette)
+			angle = math.degrees(gradient.direction(y, x)) + 90
+			length = int(round(stroke_scale + stroke_scale * math.sqrt(gradient.magnitude(y, x))))
+
+			# draw the brush stroke
+			cv2.ellipse(res, (x, y), (length, stroke_scale), angle, 0, 360, color, -1, cv2.LINE_AA)
+
+	return res
+
+parser = argparse.ArgumentParser(description='this script will convert your normal video to painting-style video. example usage: video2painting.py oil video.mp4')
+parser.add_argument('mode', metavar='mode', type=str, help='the video conversion mode ("oil", "point")')
+parser.add_argument('source_video', metavar='source', type=str, help='the video filename (currently only mp4)')
 args = parser.parse_args()
 
-inputfile = args.source_video[0]
+if not (args.mode in list_of_mode):
+	assert False
 
+inputfile = args.source_video
+print("processing", inputfile, "...")	
 try:
 	# img = cv2.imread('img.jpg')
 	# res = cv2.xphoto.oilPainting(img, 7, 1)
@@ -43,7 +104,7 @@ try:
 	i = 0
 	print("converting video to frames...")
 	try:
-		os.mkdir("temp")
+		os.mkdir("temp"+str(filename))
 	except:
 		print("i think there is already a folder named temp, pls delete it")
 		assert False
@@ -51,7 +112,7 @@ try:
 		ret, frame = cap.read()
 		if ret == False:
 			break
-		cv2.imwrite('temp/temp'+str(filename)+str(i)+'.jpg',frame)
+		cv2.imwrite('temp'+str(filename)+'/temp'+str(filename)+str(i)+'.jpg',frame)
 		i += 1
 	
 	cap.release()
@@ -66,8 +127,13 @@ try:
 	size = ()
 	printProgressBar(0, i, prefix = 'Progress:', suffix = 'Complete', length = 50)
 	for j in range(0, i):
-		img = cv2.imread('temp/temp'+str(filename)+str(j)+'.jpg')
-		res = cv2.xphoto.oilPainting(img, 8, 1)
+		img = cv2.imread('temp'+str(filename)+'/temp'+str(filename)+str(j)+'.jpg')
+		## actual conversion
+		if args.mode == "oil":
+			res = toOilPainting(img)
+		elif args.mode == "point":
+			res = toPointillismPainting(img)
+		##
 		height, width, layers = img.shape
 		size = (width,height)
 		painting_array.append(res)
@@ -76,7 +142,7 @@ try:
 	print("finished converting the frames to painting")
 	
 	print("continuing to convert the painting frames back to video...")
-	video_output = cv2.VideoWriter('painted_'+str(filename)+'.avi',cv2.VideoWriter_fourcc(*'DIVX'), fps, size)
+	video_output = cv2.VideoWriter('painted_'+str(filename)+"_"+str(args.mode)+'.avi',cv2.VideoWriter_fourcc(*'DIVX'), fps, size)
 	printProgressBar(0, len(painting_array), prefix = 'Progress:', suffix = 'Complete', length = 50)
 	for j in range(len(painting_array)):
 		video_output.write(painting_array[j])
@@ -85,14 +151,14 @@ try:
 	print("all finished!")
 
 except Exception as e:
-	print("\nencountered error!")
+	print("\nEncountered error!")
 	print(e)
 
 ##############
 # cleaning up
 finally:
-	filelist = glob.glob(os.path.join(os.getcwd(), "temp/*.jpg"))
+	filelist = glob.glob(os.path.join(os.getcwd(), 'temp'+str(filename)+'/*.jpg'))
 	for f in filelist:
 		os.remove(f)
-	os.rmdir("temp")
+	os.rmdir("temp"+str(filename))
 	print("removed temporary images")
