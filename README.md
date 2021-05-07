@@ -24,7 +24,13 @@ I noticed that with higher FPS, the video doesn't look any better than downgrade
 
 The one bug I also noticed is by reducing the FPS, the video result will be longer in proportion of FPS reduction. Haven't thought about the solution, but I'll get into it in the future.
 
+Requirements:
+- opencv2-python
+- opencv2-contrib-python
+- progressbar2
+- makeasciiart
+
 Original author of each mode:
 `oil` --- opencv2-contrib
 `point` --- [Pointillism](https://github.com/matteo-ronchetti/Pointillism) by Matteo Ronchetti (MIT License)
-`ascii` --- [From this tutorial](https://www.learnpythonwithrune.org/ascii-art-of-live-webcam-stream-with-opencv/) by Rune
+`ascii` --- [makeasciiart](https://pypi.org/project/makeasciiart/) by SSS (MIT License)
