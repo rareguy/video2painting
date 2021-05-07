@@ -20,7 +20,11 @@ optional arguments:
   --fps [fps]  custom fps to make the visual looks cooler
 ```
 
+I noticed that with higher FPS, the video doesn't look any better than downgraded video quality on youtube, so I made an option to have custom fps that should be *lower* than the original. More or zero will be counted as default, the same as original video. I recommend to have around 12 FPS so it will feel like stop-motion rather than low resolution video.
+
+The one bug I also noticed is by reducing the FPS, the video result will be longer in proportion of FPS reduction. Haven't thought about the solution, but I'll get into it in the future.
+
 Original author of each mode:
 `oil` --- opencv2-contrib
 `point` --- [Pointillism](https://github.com/matteo-ronchetti/Pointillism) by Matteo Ronchetti (MIT License)
-`ascii` --- [Rune](https://www.learnpythonwithrune.org/ascii-art-of-live-webcam-stream-with-opencv/)
+`ascii` --- [From this tutorial](https://www.learnpythonwithrune.org/ascii-art-of-live-webcam-stream-with-opencv/) by Rune
