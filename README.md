@@ -3,6 +3,7 @@
 A short script to convert any video supported by OpenCV Python (without audio) to artsy styled video like stop-motion painting etc. Currently uses three main mode: `oil`, `point`, and `ascii`.
 
 Written in Python3.
+Tested in Python3.7 in Windows
 
 How to use:
 ```
@@ -34,3 +35,8 @@ Original author of each mode:
 `oil` --- opencv2-contrib
 `point` --- [Pointillism](https://github.com/matteo-ronchetti/Pointillism) by Matteo Ronchetti (MIT License)
 `ascii` --- [makeasciiart](https://pypi.org/project/makeasciiart/) by SSS (MIT License)
+
+### Unusual stuffs
+- I made this in python 3.7 with conda and for some reason using base version it's not working at all. (Some Windows library issue)
+- `makeascii` option is still buggy because weird behaviour of the library
+- Any new video option ideas are welcome
