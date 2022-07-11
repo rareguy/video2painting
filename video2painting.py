@@ -7,9 +7,12 @@ import math
 import progressbar
 import sys
 from pointillism import *
-from numba import jit
-import makeasciiart
+from numba import jit, njit
+import linedraw
 import traceback
+from PIL import Image
+import moviepy.video.io.ImageSequenceClip
+import natsort
 
 ###
 # cleaning up warnings that littered the output
@@ -17,6 +20,47 @@ import warnings
 from warnings import simplefilter
 # ignore all future warnings
 simplefilter(action='ignore', category=FutureWarning)
+
+def convert2png(svg_file, png_file, resolution = 300):
+    from wand.api import library
+    import wand.color
+    import wand.image
+
+    with open(svg_file, "r") as svg_file:
+        with wand.image.Image() as image:
+            with wand.color.Color('white') as background_color:
+                library.MagickSetBackgroundColor(image.wand, 
+                                                 background_color.resource) 
+            svg_blob = svg_file.read().encode('utf-8')
+            image.read(blob=svg_blob, resolution = resolution, background="white")
+            png_image = image.make_blob("png32")
+
+    with open(png_file, "wb") as out:
+        out.write(png_image)
+
+def convert2video(filename, mode, target_fps, size, arrays):
+	video_output = cv2.VideoWriter('painted_'+str(filename)+"_"+mode+'.avi', cv2.VideoWriter_fourcc(*'DIVX'), 1, size)
+	printProgressBar(0, len(arrays), prefix = 'Progress:', suffix = 'Complete', length = 50)
+	for j in range(len(arrays)):
+		video_output.write(arrays[j])
+		printProgressBar(j+1, len(arrays), prefix = 'Progress:', suffix = 'Complete', length = 50)
+	video_output.release()
+
+def convert2video_linedraw(src_folder, target, target_fps):
+	image_folder = src_folder
+	image_files = natsort.natsorted([os.path.join(image_folder,img)
+               for img in os.listdir(image_folder)
+               if img.endswith(".png")])
+	clip = moviepy.video.io.ImageSequenceClip.ImageSequenceClip(image_files, fps=target_fps)
+	clip.write_videofile(target)
+
+def convert2video_new(src_folder, target, target_fps):
+	image_folder = src_folder
+	image_files = natsort.natsorted([os.path.join(image_folder,img)
+               for img in os.listdir(image_folder)
+               if img.endswith("conv.png")])
+	clip = moviepy.video.io.ImageSequenceClip.ImageSequenceClip(image_files, fps=target_fps)
+	clip.write_videofile(target)
 
 ###
 # Functions that are useful for readability... maybe
@@ -41,11 +85,11 @@ def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, 
     if iteration == total: 
         print()
 
-list_of_mode = ['oil', 'point']
+list_of_mode = ['oil', 'point', 'linedraw']
 
 def toOilPainting(img):
 	return cv2.xphoto.oilPainting(img, 8, 1)
-	
+
 def toPointillismPainting(img):
 	stroke_scale = int(math.ceil(max(img.shape) / 250))
 	#print("Automatically chosen stroke scale: %d" % stroke_scale)
@@ -93,10 +137,28 @@ def toPointillismPainting(img):
 
 	return res
 
-def toASCIIArt(filename):
-	# not yet implemented, the library is buggy
-	origin, newimg = makeasciiart.img2ascii(filename)
-	return newimg
+@jit
+def toLinedraw(filedir, filename):
+	#print(os.path.join(filedir, filename))
+	lines = linedraw.sketch(os.path.join(filedir, filename))
+	pngname = filename[:-4]+"_pngout.png"
+	pngname_dir = os.path.join("output", pngname)
+	png_white_bg_name = filename[:-4]+"_pngwout.png"
+	png_white_bg_name_dir = os.path.join("output", png_white_bg_name)
+	convert2png("output/out.svg", pngname_dir)
+	
+	image=Image.open(pngname_dir)
+	non_transparent=Image.new('RGB',(3840,2160),(255,255,255))
+	non_transparent.paste(image,(0,0),image)
+	non_transparent.save(png_white_bg_name_dir)
+	os.remove(pngname_dir)
+	res = cv2.imread(png_white_bg_name_dir)
+	return res
+
+# def toASCIIArt(filename):
+# 	# not yet implemented, the library is buggy
+# 	origin, newimg = makeasciiart.img2ascii(filename)
+# 	return newimg
 
 parser = argparse.ArgumentParser(description='this script will convert your normal video to painting-style video. example usage: video2painting.py oil video.mp4')
 parser.add_argument('mode', metavar='mode', type=str, help='the video conversion mode ('+ ", ".join(list_of_mode)+ ")")
@@ -148,35 +210,41 @@ try:
 	##############
 	# convert to painting
 	print("continuing to convert the frames to painting...")
-	painting_array = []
+	#painting_array = []
 	size = ()
 	printProgressBar(0, i, prefix = 'Progress:', suffix = 'Complete', length = 50)
 	for j in range(0, i):
 		## actual conversion
 		img = cv2.imread('temp'+str(filename)+'/temp'+str(filename)+str(j)+'.jpg')
-		
 		if args.mode == "oil":
 			res = toOilPainting(img)
 		elif args.mode == "point":
 			res = toPointillismPainting(img)
-		# elif args.mode == "ascii":
-			# ## special case cuz the input is filename, so whatever
-			# res = toASCIIArt('temp'+str(filename)+'/temp'+str(filename)+str(j)+'.jpg')
-		##
-		height, width, layers = img.shape
+		elif args.mode == "linedraw":
+			# special case cuz the input is filename, so whatever
+			res = toLinedraw('temp'+str(filename), 'temp'+str(filename)+str(j)+'.jpg')
+		
+		height, width, layers = res.shape
 		size = (width,height)
-		painting_array.append(res)
-		#cv2.imwrite('temp'+str(i)+'conv.jpg', img)
+		#painting_array.append(res)
+		if not args.mode == "linedraw":
+			cv2.imwrite(os.path.join("temp"+str(filename), 'temp'+str(j)+'conv.png'), img)
 		printProgressBar(j+1, i, prefix = 'Progress:', suffix = 'Complete', length = 50)
+	#print(len(painting_array))
+	#for f in painting_array:
+	#	print(f.shape)
 	print("finished converting the frames to painting")
-	
 	print("continuing to convert the painting frames back to video...")
-	video_output = cv2.VideoWriter('painted_'+str(filename)+"_"+str(args.mode)+'.avi',cv2.VideoWriter_fourcc(*'DIVX'), target_fps, size)
-	printProgressBar(0, len(painting_array), prefix = 'Progress:', suffix = 'Complete', length = 50)
-	for j in range(len(painting_array)):
-		video_output.write(painting_array[j])
-		printProgressBar(j+1, len(painting_array), prefix = 'Progress:', suffix = 'Complete', length = 50)
-	video_output.release()
+	if args.mode == "linedraw":
+		convert2video_linedraw("output", 'painted_'+str(filename)+"_"+str(args.mode)+'.mp4', target_fps)
+	else:
+		convert2video_new("temp"+str(filename),'painted_'+str(filename)+"_"+str(args.mode)+'.mp4' , target_fps)
+	# video_output = cv2.VideoWriter('painted_'+str(filename)+"_"+str(args.mode)+'.avi',cv2.VideoWriter_fourcc(*'DIVX'), target_fps, size)
+	# printProgressBar(0, len(painting_array), prefix = 'Progress:', suffix = 'Complete', length = 50)
+	# for j in range(len(painting_array)):
+	# 	video_output.write(painting_array[j])
+	# 	printProgressBar(j+1, len(painting_array), prefix = 'Progress:', suffix = 'Complete', length = 50)
+	# video_output.release()
 	print("all finished!")
 
 except Exception as e:
@@ -188,7 +256,13 @@ except Exception as e:
 # cleaning up
 finally:
 	filelist = glob.glob(os.path.join(os.getcwd(), 'temp'+str(filename)+'/*.jpg'))
+	filelist2 = glob.glob(os.path.join(os.getcwd(),"output/*.png",))
+	filelist3 = glob.glob(os.path.join(os.getcwd(), 'temp'+str(filename)+'/*.png'))
 	for f in filelist:
+		os.remove(f)
+	for f in filelist2:
+		os.remove(f)
+	for f in filelist3:
 		os.remove(f)
 	os.rmdir("temp"+str(filename))
 	print("removed temporary images")

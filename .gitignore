@@ -1,3 +1,6 @@
 *.pyc
 *.avi
 *.mp4
+*.png
+temp*/
+output/
