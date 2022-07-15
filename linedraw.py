@@ -168,7 +168,7 @@ def hatch(IM,sc=16):
     return lines
 
 
-def sketch(path):
+def sketch(path, filename=None):
     IM = None
     possible = [path,"images/"+path,"images/"+path+".jpg","images/"+path+".png","images/"+path+".tif"]
     for p in possible:
@@ -197,8 +197,10 @@ def sketch(path):
         for l in lines:
             draw.line(l,(0,0,0),5)
         disp.show()
-
-    f = open(export_path,'w')
+    if filename:
+        f = open(filename,'w')
+    else:
+        f = open(export_path,'w')
     f.write(makesvg(lines))
     f.close()
     #print(len(lines),"strokes.")
@@ -211,7 +213,7 @@ def makesvg(lines):
     out = '<svg xmlns="http://www.w3.org/2000/svg" version="1.1">'
     for l in lines:
         l = ",".join([str(p[0]*0.5)+","+str(p[1]*0.5) for p in l])
-        out += '<polyline points="'+l+'" stroke="black" stroke-width="1" fill="none" />\n'
+        out += '<polyline points="'+l+'" stroke="black" stroke-width="0.5" fill="none" />\n'
     out += '</svg>'
     return out
 

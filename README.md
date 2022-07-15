@@ -1,6 +1,6 @@
 # video2painting
 
-A short script to convert any video supported by OpenCV Python (without audio) to artsy styled video like stop-motion painting etc. Currently uses three main mode: `oil`, `point`, and `ascii`.
+A short script to convert any video supported by OpenCV Python (without audio) to artsy styled video like stop-motion painting etc. Currently uses three main mode: `oil`, `point`, and `linedraw`.
 
 Written in Python3.
 Tested in Python3.7 in Windows
@@ -37,18 +37,13 @@ Original author of each mode:
 
 `linedraw` --- [linedraw](https://github.com/LingDong-/linedraw) by Lingdong Huang (MIT License)
 
-`ascii` --- [makeasciiart](https://pypi.org/project/makeasciiart/) by SSS (MIT License)
-
 ## Modes and its weird behaviour
 ### Oil
 Working as intended and CPU intensive.
 ### Point
 Working as intended. Took really long to convert.
 ### Linedraw
-It works but will always output in 4K due to the library is outputting SVG rather than image of `linedraw`. Setting the "frame" without the resolution at start will make the output image size vary slightly (usually the width), and all of the library for compiling frames to video is requiring the image to be in the exact same size. So to use this I suggest to use a 16:9 aspect ratio to make sure it doesn't crop or looks weird. I haven't thought of any solution other than doing some algorithm to find the max height or width for the collection of frames which require me some time.
-### ascii
-Not working.
-
+It works but will always output in 4K due to the library is outputting SVG rather than image of `linedraw`. Setting the "frame" without the resolution at start will make the output image size vary slightly (usually the width), and to compile frames to video requires the images to be in the exact same size. So to use this I suggest to use a 16:9 aspect ratio to make sure it doesn't crop or looks weird. I haven't thought of any solution other than doing some algorithm to find the max height or width for the collection of frames which require me some time.
 
 ### Unusual stuffs
 - I made this in python 3.7 with conda and for some reason using base version it's not working at all. (Some Windows library issue)
