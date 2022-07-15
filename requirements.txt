@@ -6,20 +6,17 @@
 # M:\pythonproject\video2painting\linedraw\linedraw.py: 5
 # M:\pythonproject\video2painting\linedraw\strokesort.py: 2
 # M:\pythonproject\video2painting\strokesort.py: 2
-# M:\pythonproject\video2painting\video2painting.py: 13
+# M:\pythonproject\video2painting\video2painting.py: 12
 Pillow == 9.1.1
 
 # M:\pythonproject\video2painting\video2painting.py: 25,26,27
 Wand == 0.6.7
 
-# M:\pythonproject\video2painting\video2painting.py: 14
+# M:\pythonproject\video2painting\video2painting.py: 13
 moviepy == 1.0.3
 
-# M:\pythonproject\video2painting\video2painting.py: 15
+# M:\pythonproject\video2painting\video2painting.py: 14
 natsort == 8.1.0
-
-# M:\pythonproject\video2painting\video2painting.py: 10
-numba == 0.55.1
 
 # M:\pythonproject\video2painting\linedraw.py: 22
 # M:\pythonproject\video2painting\linedraw\linedraw.py: 22
@@ -37,11 +34,11 @@ numpy == 1.21.5
 # M:\pythonproject\video2painting\video2painting.py: 1
 opencv_python == 4.6.0.66
 
-# M:\pythonproject\video2painting\video2painting.py: 7
-progressbar == 2.5
-
 # M:\pythonproject\video2painting\pointillism\color_palette.py: 4
 scikit_learn == 0.23.2
 
 # M:\pythonproject\video2painting\pointillism\__init__.py: 2
 scipy == 1.5.2
+
+# M:\pythonproject\video2painting\video2painting.py: 8
+tqdm == 4.64.0
