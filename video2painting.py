@@ -38,27 +38,11 @@ def convert2png(svg_file, png_file, resolution = 300):
     with open(png_file, "wb") as out:
         out.write(png_image)
 
-def convert2video(filename, mode, target_fps, size, arrays):
-	video_output = cv2.VideoWriter('painted_'+str(filename)+"_"+mode+'.avi', cv2.VideoWriter_fourcc(*'DIVX'), 1, size)
-	printProgressBar(0, len(arrays), prefix = 'Progress:', suffix = 'Complete', length = 50)
-	for j in range(len(arrays)):
-		video_output.write(arrays[j])
-		printProgressBar(j+1, len(arrays), prefix = 'Progress:', suffix = 'Complete', length = 50)
-	video_output.release()
-
-def convert2video_linedraw(src_folder, target, target_fps):
+def convert2video(src_folder, target, target_fps):
 	image_folder = src_folder
 	image_files = natsort.natsorted([os.path.join(image_folder,img)
                for img in os.listdir(image_folder)
                if img.endswith(".png")])
-	clip = moviepy.video.io.ImageSequenceClip.ImageSequenceClip(image_files, fps=target_fps)
-	clip.write_videofile(target)
-
-def convert2video_new(src_folder, target, target_fps):
-	image_folder = src_folder
-	image_files = natsort.natsorted([os.path.join(image_folder,img)
-               for img in os.listdir(image_folder)
-               if img.endswith("conv.png")])
 	clip = moviepy.video.io.ImageSequenceClip.ImageSequenceClip(image_files, fps=target_fps)
 	clip.write_videofile(target)
 
@@ -89,6 +73,12 @@ list_of_mode = ['oil', 'point', 'linedraw']
 
 def toOilPainting(img):
 	return cv2.xphoto.oilPainting(img, 8, 1)
+
+def toOilPaintingConcurrent(filename):
+	pngname = filename[:-4]+"_pngout.png"
+	img = cv2.imread(filename)
+	res = cv2.xphoto.oilPainting(img, 8, 1)
+	cv2.imwrite(pngname, res)
 
 def toPointillismPainting(img):
 	stroke_scale = int(math.ceil(max(img.shape) / 250))
@@ -137,8 +127,56 @@ def toPointillismPainting(img):
 
 	return res
 
+def toPointillismPaintingConcurrent(filename):
+	img = cv2.imread(filename)
+	pngname = filename[:-4]+"_pngout.png"
+	stroke_scale = int(math.ceil(max(img.shape) / 250))
+	#print("Automatically chosen stroke scale: %d" % stroke_scale)
+	
+	gradient_smoothing_radius = int(round(max(img.shape) / 50))
+	#print("Automatically chosen gradient smoothing radius: %d" % gradient_smoothing_radius)
+
+	# convert the image to grayscale to compute the gradient
+	gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+	#print("Computing color palette...")
+	palette = ColorPalette.from_image(img, 20)
+
+	#print("Extending color palette...")
+	palette = palette.extend([(0, 50, 0), (15, 30, 0), (-15, 30, 0)])
+
+	#print("Computing gradient...")
+	gradient = VectorField.from_gradient(gray)
+
+	#print("Smoothing gradient...")
+	gradient.smooth(gradient_smoothing_radius)
+
+	#print("Drawing image...")
+	# create a "cartonized" version of the image to use as a base for the painting
+	res = cv2.medianBlur(img, 11)
+	# define a randomized grid of locations for the brush strokes
+	grid = randomized_grid(img.shape[0], img.shape[1], scale=3)
+	batch_size = 10000
+
+	#bar = progressbar.ProgressBar()
+	for h in range(0, len(grid), batch_size):
+		# get the pixel colors at each point of the grid
+		pixels = np.array([img[x[0], x[1]] for x in grid[h:min(h + batch_size, len(grid))]])
+		# precompute the probabilities for each color in the palette
+		# lower values of k means more randomnes
+		color_probabilities = compute_color_probabilities(pixels, palette, k=9)
+
+		for i, (y, x) in enumerate(grid[h:min(h + batch_size, len(grid))]):
+			color = color_select(color_probabilities[i], palette)
+			angle = math.degrees(gradient.direction(y, x)) + 90
+			length = int(round(stroke_scale + stroke_scale * math.sqrt(gradient.magnitude(y, x))))
+
+			# draw the brush stroke
+			cv2.ellipse(res, (x, y), (length, stroke_scale), angle, 0, 360, color, -1, cv2.LINE_AA)
+
+	cv2.imwrite(pngname, res)
+
 def toLinedraw(filedir, filename):
-	#print(os.path.join(filedir, filename))
 	lines = linedraw.sketch(os.path.join(filedir, filename), filename)
 	pngname = filename[:-4]+"_pngout.png"
 	pngname_dir = os.path.join("output", pngname)
@@ -168,11 +206,6 @@ def toLinedrawConcurrent(filename):
 	non_transparent.save(png_white_bg_name)
 	os.remove(pngname)
 
-# def toASCIIArt(filename):
-# 	# not yet implemented, the library is buggy
-# 	origin, newimg = makeasciiart.img2ascii(filename)
-# 	return newimg
-
 def main():
 	parser = argparse.ArgumentParser(description='this script will convert your normal video to painting-style video. example usage: video2painting.py oil video.mp4')
 	parser.add_argument('mode', metavar='mode', type=str, help='the video conversion mode ('+ ", ".join(list_of_mode)+ ")")
@@ -188,8 +221,6 @@ def main():
 	inputfile = args.source_video
 	print("processing", inputfile, "...")	
 	try:
-		# img = cv2.imread('img.jpg')
-		# res = cv2.xphoto.oilPainting(img, 7, 1)
 		target_fps = 0
 		# Opens the Video file
 		cap= cv2.VideoCapture(inputfile)
@@ -224,9 +255,8 @@ def main():
 		##############
 		# convert to painting
 		print("continuing to convert the frames to painting...")
-		#painting_array = []
 		if args.mode == "linedraw":
-			print("fair warning, linedraw will use your entire CPU pool to make the conversion feasibly fast.\npress ctrl+c if you're not ready to use this yet.")
+			print("fair warning, this will use your entire CPU pool to make the conversion feasibly fast.\npress ctrl+c if you're not ready to use this yet.")
 			all_raw_image = glob.glob('temp'+str(filename)+'/temp'+str(filename)+'*.jpg')
 			len_all_raw_image = len(all_raw_image)
 			with tqdm(total=len_all_raw_image) as pbar:
@@ -235,45 +265,31 @@ def main():
 					futures = {executor.submit(toLinedrawConcurrent, arg): arg for arg in all_raw_image}
 					for future in concurrent.futures.as_completed(futures):
 						pbar.update(1)
-		print(glob.glob('temp'+str(filename)+"/"))
-		size = ()
-		#printProgressBar(0, i, prefix = 'Progress:', suffix = 'Complete', length = 50)
-		with tqdm(total=i) as pbar:
-			for j in range(0, i):
-				## actual conversion
-				img = cv2.imread('temp'+str(filename)+'/temp'+str(filename)+str(j)+'.jpg')
-				if args.mode == "oil":
-					res = toOilPainting(img)
-				elif args.mode == "point":
-					res = toPointillismPainting(img)
-				elif args.mode == "linedraw":
+		elif args.mode == "oil":
+			print("fair warning, this will use your entire CPU pool to make the conversion feasibly fast.\npress ctrl+c if you're not ready to use this yet.")
+			all_raw_image = glob.glob('temp'+str(filename)+'/temp'+str(filename)+'*.jpg')
+			len_all_raw_image = len(all_raw_image)
+			with tqdm(total=len_all_raw_image) as pbar:
+				with concurrent.futures.ProcessPoolExecutor() as executor:
 					# special case cuz the input is filename, so whatever
-					break
-					#res = toLinedraw('temp'+str(filename), 'temp'+str(filename)+str(j)+'.jpg')
-				
-				height, width, layers = res.shape
-				size = (width,height)
-				#painting_array.append(res)
-				if not args.mode == "linedraw":
-					cv2.imwrite(os.path.join("temp"+str(filename), 'temp'+str(j)+'conv.png'), img)
-				pbar.update(1)
+					futures = {executor.submit(toOilPaintingConcurrent, arg): arg for arg in all_raw_image}
+					for future in concurrent.futures.as_completed(futures):
+						pbar.update(1)
+		elif args.mode == "point":
+			print("fair warning, this will use your entire CPU pool to make the conversion feasibly fast.\npress ctrl+c if you're not ready to use this yet.")
+			all_raw_image = glob.glob('temp'+str(filename)+'/temp'+str(filename)+'*.jpg')
+			len_all_raw_image = len(all_raw_image)
+			with tqdm(total=len_all_raw_image) as pbar:
+				with concurrent.futures.ProcessPoolExecutor() as executor:
+					# special case cuz the input is filename, so whatever
+					futures = {executor.submit(toPointillismPaintingConcurrent, arg): arg for arg in all_raw_image}
+					for future in concurrent.futures.as_completed(futures):
+						pbar.update(1)
+		print(glob.glob('temp'+str(filename)+"/"))
 		pbar.close()
-			#printProgressBar(j+1, i, prefix = 'Progress:', suffix = 'Complete', length = 50)
-		#print(len(painting_array))
-		#for f in painting_array:
-		#	print(f.shape)
 		print("finished converting the frames to painting")
 		print("continuing to convert the painting frames back to video...")
-		if args.mode == "linedraw":
-			convert2video_linedraw("temp"+str(filename), 'painted_'+str(filename)+"_"+str(args.mode)+'.mp4', target_fps)
-		else:
-			convert2video_new("temp"+str(filename),'painted_'+str(filename)+"_"+str(args.mode)+'.mp4' , target_fps)
-		# video_output = cv2.VideoWriter('painted_'+str(filename)+"_"+str(args.mode)+'.avi',cv2.VideoWriter_fourcc(*'DIVX'), target_fps, size)
-		# printProgressBar(0, len(painting_array), prefix = 'Progress:', suffix = 'Complete', length = 50)
-		# for j in range(len(painting_array)):
-		# 	video_output.write(painting_array[j])
-		# 	printProgressBar(j+1, len(painting_array), prefix = 'Progress:', suffix = 'Complete', length = 50)
-		# video_output.release()
+		convert2video("temp"+str(filename), 'painted_'+str(filename)+"_"+str(args.mode)+'.mp4', target_fps)
 		print("all finished!")
 
 	except Exception as e:
