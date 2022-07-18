@@ -15,7 +15,7 @@ class ColorPalette:
         # scale down the image to speedup kmeans
         img = limit_size(img, max_img_size)
 
-        clt = KMeans(n_clusters=n, n_jobs=1, n_init=n_init)
+        clt = KMeans(n_clusters=n, n_init=n_init)
         clt.fit(img.reshape(-1, 3))
 
         return ColorPalette(clt.cluster_centers_)
