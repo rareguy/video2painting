@@ -9,3 +9,4 @@ opencv_contrib_python == 4.6.0.66
 scipy == 1.8.1
 sklearn == 0.0
 tqdm == 4.64.0
+triangler == 0.4

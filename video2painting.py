@@ -1,15 +1,21 @@
+def warn(*args, **kwargs):
+    pass
+import warnings
+warnings.warn = warn
+
 import cv2
 import glob
 import os
 import argparse
 import math
 import sys
+import triangler
 
 from tqdm import tqdm
 from pointillism import *
 import linedraw
 import traceback
-from PIL import Image
+from PIL import Image, ImageColor
 import moviepy.video.io.ImageSequenceClip
 import natsort
 import concurrent.futures
@@ -21,18 +27,22 @@ from warnings import simplefilter
 # ignore all future warnings
 simplefilter(action='ignore', category=FutureWarning)
 
-def convert2png(svg_file, png_file, resolution = 300):
+#######################
+### UTILITY FUNCTIONS
+#######################
+
+def convert2png(svg_file, png_file, background, resolution = 300):
     from wand.api import library
     import wand.color
     import wand.image
 
     with open(svg_file, "r") as svg_file:
         with wand.image.Image() as image:
-            with wand.color.Color('white') as background_color:
+            with wand.color.Color(background) as background_color:
                 library.MagickSetBackgroundColor(image.wand, 
                                                  background_color.resource) 
             svg_blob = svg_file.read().encode('utf-8')
-            image.read(blob=svg_blob, resolution = resolution, background="white")
+            image.read(blob=svg_blob, resolution = resolution, background=background)
             png_image = image.make_blob("png32")
 
     with open(png_file, "wb") as out:
@@ -69,7 +79,11 @@ def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, 
     if iteration == total: 
         print()
 
-list_of_mode = ['oil', 'point', 'linedraw']
+#####################
+### MODES FUNCTIONS
+#####################
+
+list_of_mode = ['oil', 'point', 'linedraw', 'triangler']
 
 def toOilPainting(img):
 	return cv2.xphoto.oilPainting(img, 8, 1)
@@ -185,32 +199,43 @@ def toLinedraw(filedir, filename):
 	convert2png("output/"+filename+".svg", pngname_dir)
 	
 	image=Image.open(pngname_dir)
-	non_transparent=Image.new('RGB',(3840,2160),(255,255,255))
+	non_transparent=Image.new('RGB',(3840,2160),(0,0,0))
 	non_transparent.paste(image,(0,0),image)
 	non_transparent.save(png_white_bg_name_dir)
 	os.remove(pngname_dir)
 	res = cv2.imread(png_white_bg_name_dir)
 	return res
 
-def toLinedrawConcurrent(filename):
+def toLinedrawConcurrent(filename, color, background):
 	pngname = filename[:-4]+"_pngout.png"
 	png_white_bg_name = filename[:-4]+"_pngwout.png"
 	svgout = filename[:-4]+".svg"
-	lines = linedraw.sketch(filename, svgout)
+	lines = linedraw.sketch(filename, color, svgout)
 	
-	convert2png(svgout, pngname)
-	
+	convert2png(svgout, pngname, background)
+	backgroundtuple = ImageColor.getcolor(background, "RGB")
+
 	image=Image.open(pngname)
-	non_transparent=Image.new('RGB',(3840,2160),(255,255,255))
+	non_transparent=Image.new('RGB',(3840,2160),backgroundtuple)
 	non_transparent.paste(image,(0,0),image)
 	non_transparent.save(png_white_bg_name)
 	os.remove(pngname)
 
+def toTrianglerConcurrent(filename):
+	pngname = filename[:-4]+"_pngout.png"
+	triangler_instance = triangler.Triangler()
+	triangler_instance.convert_and_save(filename, pngname)
+
+#########
+### MAIN
+#########
 def main():
 	parser = argparse.ArgumentParser(description='this script will convert your normal video to painting-style video. example usage: video2painting.py oil video.mp4')
 	parser.add_argument('mode', metavar='mode', type=str, help='the video conversion mode ('+ ", ".join(list_of_mode)+ ")")
 	parser.add_argument('source_video', metavar='source', type=str, help='the video filename (currently only mp4) put the source ONLY IN CURRENT DIRECTORY, if you use exact path it will bug out')
 	parser.add_argument('--fps', metavar='fps', type=int, nargs="?", help='custom fps to make the visual looks cooler', default=0)
+	parser.add_argument('--color', metavar='color', type=str, nargs="?", help='(linedraw only) (RGB ONLY) use certain line color, FORMAT: #XXXXXX', default="#000000")
+	parser.add_argument('--background', metavar='background', type=str, nargs="?", help='(linedraw only) (RGB ONLY) use certain background color, FORMAT: #XXXXXX', default="#FFFFFF")
 	args = parser.parse_args()
 
 	if not (args.mode in list_of_mode):
@@ -230,6 +255,8 @@ def main():
 			target_fps = args.fps
 		else:
 			target_fps = fps
+		color = args.color
+		background = args.background
 		print("Original FPS:", fps)
 		print("Target FPS:", target_fps)
 		
@@ -262,7 +289,7 @@ def main():
 			with tqdm(total=len_all_raw_image) as pbar:
 				with concurrent.futures.ProcessPoolExecutor() as executor:
 					# special case cuz the input is filename, so whatever
-					futures = {executor.submit(toLinedrawConcurrent, arg): arg for arg in all_raw_image}
+					futures = {executor.submit(toLinedrawConcurrent, arg, color, background): arg for arg in all_raw_image}
 					for future in concurrent.futures.as_completed(futures):
 						pbar.update(1)
 		elif args.mode == "oil":
@@ -285,7 +312,14 @@ def main():
 					futures = {executor.submit(toPointillismPaintingConcurrent, arg): arg for arg in all_raw_image}
 					for future in concurrent.futures.as_completed(futures):
 						pbar.update(1)
-		print(glob.glob('temp'+str(filename)+"/"))
+		elif args.mode == "triangler":
+			print("fair warning, this will take long time because the algorithm is RAM heavy which is not ideal for CPU multiprocessing (which is default for other mode)")
+			all_raw_image = glob.glob('temp'+str(filename)+'/temp'+str(filename)+'*.jpg')
+			len_all_raw_image = len(all_raw_image)
+			with tqdm(total=len_all_raw_image) as pbar:
+				for image in all_raw_image:
+					toTrianglerConcurrent(image)
+					pbar.update(1)
 		pbar.close()
 		print("finished converting the frames to painting")
 		print("continuing to convert the painting frames back to video...")

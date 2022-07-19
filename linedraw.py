@@ -2,7 +2,7 @@ from random import *
 import math
 import argparse
 
-from PIL import Image, ImageDraw, ImageOps
+from PIL import Image, ImageDraw, ImageOps, ImageColor
 
 from filters import *
 from strokesort import *
@@ -168,7 +168,7 @@ def hatch(IM,sc=16):
     return lines
 
 
-def sketch(path, filename=None):
+def sketch(path, color, filename=None):
     IM = None
     possible = [path,"images/"+path,"images/"+path+".jpg","images/"+path+".png","images/"+path+".tif"]
     for p in possible:
@@ -201,19 +201,19 @@ def sketch(path, filename=None):
         f = open(filename,'w')
     else:
         f = open(export_path,'w')
-    f.write(makesvg(lines))
+    f.write(makesvg(lines, color))
     f.close()
     #print(len(lines),"strokes.")
     #print("done.")
     return lines
 
 
-def makesvg(lines):
+def makesvg(lines, color):
     #print("generating svg file...")
     out = '<svg xmlns="http://www.w3.org/2000/svg" version="1.1">'
     for l in lines:
         l = ",".join([str(p[0]*0.5)+","+str(p[1]*0.5) for p in l])
-        out += '<polyline points="'+l+'" stroke="black" stroke-width="0.5" fill="none" />\n'
+        out += '<polyline points="'+l+'" stroke="'+color+'" stroke-width="0.5" fill="none" />\n'
     out += '</svg>'
     return out
 
