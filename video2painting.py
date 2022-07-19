@@ -15,7 +15,7 @@ from tqdm import tqdm
 from pointillism import *
 import linedraw
 import traceback
-from PIL import Image, ImageColor
+from PIL import Image, ImageColor, ImageDraw, ImageFont
 import moviepy.video.io.ImageSequenceClip
 import natsort
 import concurrent.futures
@@ -83,7 +83,7 @@ def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, 
 ### MODES FUNCTIONS
 #####################
 
-list_of_mode = ['oil', 'point', 'linedraw', 'triangler']
+list_of_mode = ['oil', 'point', 'linedraw', 'triangler', 'ascii']
 
 def toOilPainting(img):
 	return cv2.xphoto.oilPainting(img, 8, 1)
@@ -226,6 +226,41 @@ def toTrianglerConcurrent(filename):
 	triangler_instance = triangler.Triangler()
 	triangler_instance.convert_and_save(filename, pngname)
 
+def toAsciiConcurrent(filename, color, background):
+	pngname = filename[:-4]+"_pngout.png"
+	backgroundtuple = ImageColor.getcolor(background, "RGB")
+	colortuple = ImageColor.getcolor(color, 'RGB')
+	try:
+		img = Image.open(filename)
+		img_flag = True
+	except:
+		print(filename, "Unable to find image ");
+		
+	width, height = img.size
+	aspect_ratio = height/width
+	new_width = 120
+	new_height = aspect_ratio * new_width * 0.55
+	img = img.resize((new_width, int(new_height)))
+	
+	img = img.convert('L')
+	
+	chars = ["@", "%", "B", "Q", "D", "P" , "C", "P", "I", "+", "*", ",", "."]
+	
+	pixels = img.getdata()
+	new_pixels = [chars[pixel//20] for pixel in pixels]
+	new_pixels = ''.join(new_pixels)
+	new_pixels_count = len(new_pixels)
+	ascii_image = [new_pixels[index:index + new_width] for index in range(0, new_pixels_count, new_width)]
+	ascii_image = "\n".join(ascii_image)
+
+	
+	img = Image.new('RGB',(3840,2160),backgroundtuple)
+	thefont = ImageFont.truetype('UbuntuMono-R.ttf', 45)
+	drawhandle = ImageDraw.Draw(img)
+	drawhandle.text((0, 0), ascii_image, font=thefont ,fill=colortuple)
+	img.save(pngname)
+
+
 #########
 ### MAIN
 #########
@@ -320,6 +355,21 @@ def main():
 				for image in all_raw_image:
 					toTrianglerConcurrent(image)
 					pbar.update(1)
+		if args.mode == "ascii":
+			print("fair warning, this will use your entire CPU pool to make the conversion feasibly fast.\npress ctrl+c if you're not ready to use this yet.")
+			all_raw_image = glob.glob('temp'+str(filename)+'/temp'+str(filename)+'*.jpg')
+			len_all_raw_image = len(all_raw_image)
+			with tqdm(total=len_all_raw_image) as pbar:
+				with concurrent.futures.ProcessPoolExecutor() as executor:
+					# special case cuz the input is filename, so whatever
+					futures = {executor.submit(toAsciiConcurrent, arg, color, background): arg for arg in all_raw_image}
+					for future in concurrent.futures.as_completed(futures):
+						try:
+							data = future.result()
+						except Exception as e:
+							print("error")
+							print(e)
+						pbar.update(1)
 		pbar.close()
 		print("finished converting the frames to painting")
 		print("continuing to convert the painting frames back to video...")
