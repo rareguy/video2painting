@@ -45,6 +45,10 @@ Working as intended. Took really long to convert.
 ### Linedraw
 It works but will always output in 4K due to the library is outputting SVG rather than image of `linedraw`. Setting the "frame" without the resolution at start will make the output image size vary slightly (usually the width), and to compile frames to video requires the images to be in the exact same size. So to use this I suggest to use a 16:9 aspect ratio to make sure it doesn't crop or looks weird. I haven't thought of any solution other than doing some algorithm to find the max height or width for the collection of frames which require me some time.
 
+## Sample videos
+[arenji - Kunzite](https://www.youtube.com/watch?v=_PsMQmHJHyE)
+[rareguy ft. Sheirara - Kuliah](https://www.youtube.com/watch?v=PCINnSDpkt8)
+
 ### Unusual stuffs
 - I made this in python 3.7 with conda and for some reason using base version it's not working at all. (Some Windows library issue)
 - `makeascii` option is still buggy because weird behaviour of the library
